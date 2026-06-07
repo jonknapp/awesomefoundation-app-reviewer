@@ -607,7 +607,7 @@
         <button class="filter-btn" data-filter="not-hidden">Not Hidden</button>
         <button class="filter-btn hidden-filter" data-filter="hidden">Hidden</button>
       </div>
-      <input type="text" id="searchBox" placeholder="Search name or title…">
+      <input type="text" id="searchBox" placeholder="Search applications…">
     </div>
     <div id="appList"></div>
   </div>
@@ -711,7 +711,7 @@ const REVIEW_COLS = ['_review_rating', '_review_comment', '_review_tags', '_revi
 
 let applications = [];   // array of raw data objects
 let reviews = {};        // { [id]: { rating, comment, tags: [], viewed } }
-let activeFilters = new Set(['not-hidden']); // default: hide hidden entries
+let activeFilters = new Set(['not-hidden', 'not-reviewed']); // default: hide hidden and already-reviewed
 let currentSearch = '';
 let currentId = null;
 
@@ -774,9 +774,8 @@ function getFilteredIds() {
       if (activeFilters.has('not-hidden') && isHidden) return false;
 
       if (search) {
-        const name = (app.name || '').toLowerCase();
-        const title = (app.title || '').toLowerCase();
-        if (!name.includes(search) && !title.includes(search)) return false;
+        const haystack = Object.values(app).join(' ').toLowerCase();
+        if (!haystack.includes(search)) return false;
       }
       return true;
     })
