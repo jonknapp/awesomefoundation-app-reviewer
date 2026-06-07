@@ -599,6 +599,7 @@
         <button class="filter-btn" data-filter="not-viewed">Not Viewed</button>
         <button class="filter-btn" data-filter="viewed">Viewed</button>
         <button class="filter-btn" data-filter="reviewed">Reviewed</button>
+        <button class="filter-btn" data-filter="not-reviewed">Not Reviewed</button>
         <button class="filter-btn" data-filter="spam">Spam</button>
         <button class="filter-btn" data-filter="nonprofit">Nonprofit</button>
         <button class="filter-btn" data-filter="private">Private</button>
@@ -754,9 +755,14 @@ function getFilteredIds() {
       const isHidden = !!(app.hidden_at || app.hidden_reason);
       const search = currentSearch.toLowerCase();
 
-      // Status filters — if any status filter is active, app must match at least one
-      const statusFilters = ['not-viewed', 'viewed', 'reviewed'].filter(f => activeFilters.has(f));
-      if (statusFilters.length && !statusFilters.includes(status)) return false;
+      // Status filters — app must match at least one active status filter
+      // 'not-reviewed' expands to: not-viewed OR viewed
+      const allowedStatuses = new Set();
+      if (activeFilters.has('not-viewed')) allowedStatuses.add('not-viewed');
+      if (activeFilters.has('viewed')) allowedStatuses.add('viewed');
+      if (activeFilters.has('reviewed')) allowedStatuses.add('reviewed');
+      if (activeFilters.has('not-reviewed')) { allowedStatuses.add('not-viewed'); allowedStatuses.add('viewed'); }
+      if (allowedStatuses.size && !allowedStatuses.has(status)) return false;
 
       // Tag filters — app must have ALL active tag filters
       for (const tag of ['spam', 'nonprofit', 'private', 'duplicate']) {
