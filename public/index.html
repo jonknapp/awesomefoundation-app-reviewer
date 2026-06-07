@@ -416,6 +416,116 @@
     }
 
     .hidden { display: none !important; }
+
+    /* ── Conflict modal ── */
+    #conflictOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    #conflictModal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      width: 560px;
+      max-width: 100%;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0,0,0,.5);
+    }
+    .conflict-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .conflict-header h2 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+    .conflict-header p { font-size: .82rem; color: var(--text-dim); line-height: 1.5; }
+    .conflict-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .conflict-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .conflict-item-name {
+      font-size: .84rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .conflict-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .conflict-side {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 10px;
+      font-size: .75rem;
+    }
+    .conflict-side-label {
+      font-size: .65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--text-dim);
+      margin-bottom: 5px;
+    }
+    .conflict-side-value { color: var(--text); line-height: 1.5; }
+    .conflict-item-actions { display: flex; gap: 8px; }
+    .conflict-item-actions .btn { font-size: .75rem; padding: 4px 12px; }
+    .btn.chosen-browser { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+    .btn.chosen-csv { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+    .conflict-footer {
+      padding: 14px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .conflict-footer .spacer { flex: 1; }
+    .conflict-footer .resolve-hint { font-size: .75rem; color: var(--text-dim); }
+
+    /* ── Storage notice ── */
+    #storageNotice {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      width: 420px;
+      max-width: 100%;
+    }
+    #storageNotice .notice-icon {
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+    #storageNotice .notice-text {
+      flex: 1;
+      font-size: .82rem;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+    #storageNotice .notice-text b { color: var(--text); }
   </style>
 </head>
 <body>
@@ -438,6 +548,14 @@
       <p style="margin-top:6px;font-size:.72rem">Supports original export format and previously exported review files</p>
     </div>
     <input type="file" id="fileInput" accept=".csv">
+    <div id="storageNotice" class="hidden">
+      <span class="notice-icon">&#128190;</span>
+      <div class="notice-text">
+        <b id="storageNoticeCount"></b> — saved from a previous session.<br>
+        Load the same CSV to continue, or clear all saved data to start fresh.
+      </div>
+      <button class="btn danger" id="clearStorageBtn">Clear data</button>
+    </div>
   </div>
 
   <!-- Sidebar -->
@@ -474,6 +592,24 @@
     </div>
   </div>
 
+</div>
+
+<!-- Conflict resolution modal -->
+<div id="conflictOverlay" class="hidden">
+  <div id="conflictModal">
+    <div class="conflict-header">
+      <h2>Review data conflicts detected</h2>
+      <p>The CSV contains review data that differs from what's saved in your browser. Choose which version to keep for each application, then click <b>Apply</b>.</p>
+    </div>
+    <div class="conflict-list" id="conflictList"></div>
+    <div class="conflict-footer">
+      <button class="btn" id="conflictKeepAllBrowser">Keep all browser</button>
+      <button class="btn" id="conflictKeepAllCSV">Keep all CSV</button>
+      <div class="spacer"></div>
+      <span class="resolve-hint" id="resolveHint"></span>
+      <button class="btn primary" id="conflictApplyBtn">Apply</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -947,33 +1083,187 @@ function loadCSV(text) {
     return clean;
   });
 
-  // If reimporting, prefill reviews
+  // If reimporting, check for conflicts against existing localStorage data
   if (hasReviewCols) {
+    const conflicts = []; // { id, appName, browser, csv }
+
     objs.forEach((obj, idx) => {
       const id = getAppId(applications[idx], idx);
-      const rev = getReview(id);
+      const csvReview = parseCsvReview(obj);
 
-      const ratingVal = obj['_review_rating'];
-      if (ratingVal !== undefined && ratingVal !== '') {
-        const n = parseInt(ratingVal, 10);
-        if (!isNaN(n)) rev.rating = n;
+      // Only consider a conflict if the CSV actually has review data for this row
+      const csvHasData = csvReview.rating > 0 || csvReview.comment.trim() ||
+                         csvReview.tags.length > 0 || csvReview.viewed;
+      if (!csvHasData) return;
+
+      const existing = reviews[id];
+      const browserHasData = existing && (existing.rating > 0 ||
+                              (existing.comment && existing.comment.trim()) ||
+                              (existing.tags && existing.tags.length > 0) ||
+                              existing.viewed);
+      if (!browserHasData) return; // nothing in browser — safe to apply silently
+
+      // Compare: conflict only if the two differ in a meaningful way
+      const same =
+        (existing.rating || 0) === csvReview.rating &&
+        (existing.comment || '') === csvReview.comment &&
+        JSON.stringify((existing.tags || []).slice().sort()) ===
+          JSON.stringify(csvReview.tags.slice().sort()) &&
+        !!existing.viewed === csvReview.viewed;
+
+      if (!same) {
+        conflicts.push({
+          id,
+          appName: applications[idx].name || applications[idx].title || id,
+          browser: { ...existing },
+          csv: csvReview,
+        });
       }
-      const commentVal = obj['_review_comment'];
-      if (commentVal !== undefined) rev.comment = commentVal;
+    });
 
-      const tagsVal = obj['_review_tags'];
-      if (tagsVal !== undefined && tagsVal !== '') {
-        rev.tags = tagsVal.split('|').map(t => t.trim()).filter(Boolean);
-      }
+    if (conflicts.length > 0) {
+      // Show conflict modal; actual apply happens after user resolves
+      showConflictModal(conflicts, objs);
+      return; // don't call showApp() yet
+    }
 
-      const viewedVal = obj['_review_viewed'];
-      if (viewedVal === 'true' || viewedVal === '1') rev.viewed = true;
+    // No conflicts — apply all CSV review data directly
+    objs.forEach((obj, idx) => {
+      const id = getAppId(applications[idx], idx);
+      applyReviewData(id, parseCsvReview(obj));
     });
     saveStorage();
   }
 
   showApp();
 }
+
+// Parse review fields from a CSV row object
+function parseCsvReview(obj) {
+  const ratingVal = obj['_review_rating'];
+  const rating = (ratingVal !== undefined && ratingVal !== '') ? (parseInt(ratingVal, 10) || 0) : 0;
+  const comment = obj['_review_comment'] || '';
+  const tagsVal = obj['_review_tags'];
+  const tags = (tagsVal && tagsVal.trim()) ? tagsVal.split('|').map(t => t.trim()).filter(Boolean) : [];
+  const viewed = obj['_review_viewed'] === 'true' || obj['_review_viewed'] === '1';
+  return { rating, comment, tags, viewed };
+}
+
+// Write a review data object into the reviews store for a given id
+function applyReviewData(id, data) {
+  const rev = getReview(id);
+  rev.rating = data.rating;
+  rev.comment = data.comment;
+  rev.tags = data.tags;
+  if (data.viewed) rev.viewed = true; // never un-view via import
+}
+
+// ─────────────────────────────────────────────
+// Conflict modal
+// ─────────────────────────────────────────────
+let _pendingConflicts = [];
+let _pendingObjs = [];
+// choices: { [id]: 'browser' | 'csv' }
+let _conflictChoices = {};
+
+function formatReviewSummary(r) {
+  const parts = [];
+  if (r.rating > 0) parts.push(`Rating: ${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}`);
+  if (r.tags && r.tags.length) parts.push(`Tags: ${r.tags.join(', ')}`);
+  if (r.comment && r.comment.trim()) parts.push(`Comment: "${r.comment.trim()}"`);
+  if (r.viewed) parts.push('Viewed');
+  return parts.length ? parts.join('\n') : '(no review data)';
+}
+
+function updateResolveHint() {
+  const total = _pendingConflicts.length;
+  const resolved = Object.keys(_conflictChoices).length;
+  const hint = document.getElementById('resolveHint');
+  hint.textContent = resolved < total ? `${total - resolved} unresolved` : 'All resolved';
+  hint.style.color = resolved < total ? 'var(--yellow)' : 'var(--green)';
+  document.getElementById('conflictApplyBtn').disabled = resolved < total;
+}
+
+function setConflictChoice(id, choice) {
+  _conflictChoices[id] = choice;
+  // Update button states for this item
+  const item = document.querySelector(`.conflict-item[data-id="${id}"]`);
+  if (!item) return;
+  item.querySelector('[data-choose="browser"]').classList.toggle('chosen-browser', choice === 'browser');
+  item.querySelector('[data-choose="csv"]').classList.toggle('chosen-csv', choice === 'csv');
+  updateResolveHint();
+}
+
+function showConflictModal(conflicts, objs) {
+  _pendingConflicts = conflicts;
+  _pendingObjs = objs;
+  _conflictChoices = {};
+
+  const list = document.getElementById('conflictList');
+  list.innerHTML = '';
+
+  conflicts.forEach(({ id, appName, browser, csv }) => {
+    const el = document.createElement('div');
+    el.className = 'conflict-item';
+    el.dataset.id = id;
+    el.innerHTML = `
+      <div class="conflict-item-name">${esc(appName)}</div>
+      <div class="conflict-cols">
+        <div class="conflict-side">
+          <div class="conflict-side-label">Browser (current)</div>
+          <div class="conflict-side-value">${esc(formatReviewSummary(browser))}</div>
+        </div>
+        <div class="conflict-side">
+          <div class="conflict-side-label">CSV (imported)</div>
+          <div class="conflict-side-value">${esc(formatReviewSummary(csv))}</div>
+        </div>
+      </div>
+      <div class="conflict-item-actions">
+        <button class="btn" data-choose="browser">Keep browser</button>
+        <button class="btn" data-choose="csv">Keep CSV</button>
+      </div>`;
+
+    el.querySelector('[data-choose="browser"]').addEventListener('click', () => setConflictChoice(id, 'browser'));
+    el.querySelector('[data-choose="csv"]').addEventListener('click', () => setConflictChoice(id, 'csv'));
+    list.appendChild(el);
+  });
+
+  updateResolveHint();
+  document.getElementById('conflictApplyBtn').disabled = true;
+  document.getElementById('conflictOverlay').classList.remove('hidden');
+}
+
+document.getElementById('conflictKeepAllBrowser').addEventListener('click', () => {
+  _pendingConflicts.forEach(({ id }) => setConflictChoice(id, 'browser'));
+});
+
+document.getElementById('conflictKeepAllCSV').addEventListener('click', () => {
+  _pendingConflicts.forEach(({ id }) => setConflictChoice(id, 'csv'));
+});
+
+document.getElementById('conflictApplyBtn').addEventListener('click', () => {
+  // Apply non-conflicting rows first (those without browser data)
+  _pendingObjs.forEach((obj, idx) => {
+    const id = getAppId(applications[idx], idx);
+    const isConflict = _pendingConflicts.some(c => c.id === id);
+    if (!isConflict) {
+      applyReviewData(id, parseCsvReview(obj));
+    }
+  });
+
+  // Apply conflict resolutions
+  _pendingConflicts.forEach(({ id, browser, csv }) => {
+    const choice = _conflictChoices[id];
+    if (choice === 'csv') {
+      applyReviewData(id, csv);
+    }
+    // 'browser' means keep existing — no action needed
+  });
+
+  saveStorage();
+  document.getElementById('conflictOverlay').classList.add('hidden');
+  showApp();
+});
 
 // ─────────────────────────────────────────────
 // Export CSV
@@ -1029,6 +1319,30 @@ function showLanding() {
   document.getElementById('changeFileBtn').style.display = 'none';
   document.getElementById('exportBtn').style.display = 'none';
   document.getElementById('headerStats').innerHTML = '';
+  updateStorageNotice();
+}
+
+function updateStorageNotice() {
+  const notice = document.getElementById('storageNotice');
+  const keys = Object.keys(reviews);
+  const reviewed = keys.filter(k => {
+    const r = reviews[k];
+    return r && (r.viewed || r.rating > 0 || (r.comment && r.comment.trim()) || (r.tags && r.tags.length));
+  });
+  if (reviewed.length > 0) {
+    const rCount = reviewed.filter(k => {
+      const r = reviews[k];
+      return r.rating > 0 || (r.comment && r.comment.trim()) || (r.tags && r.tags.length);
+    }).length;
+    const vCount = reviewed.length - rCount;
+    const parts = [];
+    if (rCount > 0) parts.push(`<b>${rCount}</b> reviewed`);
+    if (vCount > 0) parts.push(`<b>${vCount}</b> viewed`);
+    document.getElementById('storageNoticeCount').innerHTML = parts.join(', ') + ' application' + (reviewed.length !== 1 ? 's' : '');
+    notice.classList.remove('hidden');
+  } else {
+    notice.classList.add('hidden');
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -1083,6 +1397,13 @@ document.getElementById('changeFileBtn').addEventListener('click', () => {
 
 document.getElementById('exportBtn').addEventListener('click', exportCSV);
 
+document.getElementById('clearStorageBtn').addEventListener('click', () => {
+  if (!confirm('Clear all saved review data? This cannot be undone.')) return;
+  reviews = {};
+  localStorage.removeItem(STORAGE_KEY);
+  updateStorageNotice();
+});
+
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
@@ -1098,7 +1419,7 @@ function esc(str) {
 // Init
 // ─────────────────────────────────────────────
 loadStorage();
-showLanding();
+showLanding(); // calls updateStorageNotice internally
 </script>
 </body>
 </html>
