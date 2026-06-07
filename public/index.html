@@ -158,6 +158,8 @@
       transition: all .15s;
     }
     .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .filter-btn.hidden-filter { color: var(--red); border-color: rgba(242,92,92,.35); }
+    .filter-btn.hidden-filter.active { background: rgba(242,92,92,.15); border-color: var(--red); color: var(--red); }
     #searchBox {
       width: 100%;
       padding: 6px 10px;
@@ -415,6 +417,34 @@
       .fields-grid { grid-template-columns: 1fr; }
     }
 
+    /* ── Hidden callout ── */
+    .hidden-callout {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      background: rgba(242,92,92,.08);
+      border: 1px solid rgba(242,92,92,.4);
+      border-left: 3px solid var(--red);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: .83rem;
+      line-height: 1.55;
+    }
+    .hidden-callout-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+    .hidden-callout-body { flex: 1; }
+    .hidden-callout-title {
+      font-weight: 700;
+      color: var(--red);
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin-bottom: 3px;
+    }
+    .hidden-callout-reason { color: var(--text); }
+    .hidden-callout-date { color: var(--text-dim); font-size: .75rem; margin-top: 3px; }
+
+    .tag-pill.hidden-tag { background: rgba(242,92,92,.15); border: 1px solid rgba(242,92,92,.4); color: var(--red); }
+
     .hidden { display: none !important; }
 
     /* ── Conflict modal ── */
@@ -565,7 +595,7 @@
         <h2 id="sidebarTitle">Applications</h2>
       </div>
       <div id="filterBar">
-        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="all">All</button>
         <button class="filter-btn" data-filter="not-viewed">Not Viewed</button>
         <button class="filter-btn" data-filter="viewed">Viewed</button>
         <button class="filter-btn" data-filter="reviewed">Reviewed</button>
@@ -573,6 +603,8 @@
         <button class="filter-btn" data-filter="nonprofit">Nonprofit</button>
         <button class="filter-btn" data-filter="private">Private</button>
         <button class="filter-btn" data-filter="duplicate">Duplicate</button>
+        <button class="filter-btn" data-filter="not-hidden">Not Hidden</button>
+        <button class="filter-btn hidden-filter" data-filter="hidden">Hidden</button>
       </div>
       <input type="text" id="searchBox" placeholder="Search name or title…">
     </div>
@@ -678,7 +710,7 @@ const REVIEW_COLS = ['_review_rating', '_review_comment', '_review_tags', '_revi
 
 let applications = [];   // array of raw data objects
 let reviews = {};        // { [id]: { rating, comment, tags: [], viewed } }
-let currentFilter = 'all';
+let activeFilters = new Set(['not-hidden']); // default: hide hidden entries
 let currentSearch = '';
 let currentId = null;
 
@@ -719,15 +751,21 @@ function getFilteredIds() {
       const r = reviews[id] || {};
       const status = getStatus(id);
       const tags = r.tags || [];
+      const isHidden = !!(app.hidden_at || app.hidden_reason);
       const search = currentSearch.toLowerCase();
 
-      if (currentFilter === 'not-viewed' && status !== 'not-viewed') return false;
-      if (currentFilter === 'viewed' && status !== 'viewed') return false;
-      if (currentFilter === 'reviewed' && status !== 'reviewed') return false;
-      if (currentFilter === 'spam' && !tags.includes('spam')) return false;
-      if (currentFilter === 'nonprofit' && !tags.includes('nonprofit')) return false;
-      if (currentFilter === 'private' && !tags.includes('private')) return false;
-      if (currentFilter === 'duplicate' && !tags.includes('duplicate')) return false;
+      // Status filters — if any status filter is active, app must match at least one
+      const statusFilters = ['not-viewed', 'viewed', 'reviewed'].filter(f => activeFilters.has(f));
+      if (statusFilters.length && !statusFilters.includes(status)) return false;
+
+      // Tag filters — app must have ALL active tag filters
+      for (const tag of ['spam', 'nonprofit', 'private', 'duplicate']) {
+        if (activeFilters.has(tag) && !tags.includes(tag)) return false;
+      }
+
+      // Hidden filters — mutually exclusive pair
+      if (activeFilters.has('hidden') && !isHidden) return false;
+      if (activeFilters.has('not-hidden') && isHidden) return false;
 
       if (search) {
         const name = (app.name || '').toLowerCase();
@@ -766,6 +804,7 @@ function renderList() {
         <span class="status-dot ${status}"></span>
         <span class="status-label">${status.replace('-', ' ')}</span>
         ${starsStr ? `<span class="stars-mini">${starsStr}</span>` : ''}
+        ${app.hidden_at || app.hidden_reason ? `<span class="tag-pill hidden-tag">hidden</span>` : ''}
         ${tags.map(t => `<span class="tag-pill ${t}">${t}</span>`).join('')}
       </div>`;
 
@@ -853,6 +892,16 @@ function renderDetail() {
       </div>
     </div>
 
+    ${app.hidden_at || app.hidden_reason ? `
+    <div class="hidden-callout">
+      <div class="hidden-callout-icon">&#9888;&#65039;</div>
+      <div class="hidden-callout-body">
+        <div class="hidden-callout-title">Hidden application</div>
+        ${app.hidden_reason ? `<div class="hidden-callout-reason">${esc(app.hidden_reason)}</div>` : ''}
+        ${app.hidden_at ? `<div class="hidden-callout-date">Hidden on ${esc(app.hidden_at)}</div>` : ''}
+      </div>
+    </div>` : ''}
+
     <div>
       <div class="section-label">Application</div>
       <div class="fields-grid">
@@ -882,14 +931,7 @@ function renderDetail() {
       </div>
     </div>` : ''}
 
-    ${app.hidden_at || app.hidden_reason ? `
-    <div>
-      <div class="section-label">Hidden</div>
-      <div class="fields-grid">
-        ${app.hidden_at ? fieldBlock('Hidden at', app.hidden_at) : ''}
-        ${app.hidden_reason ? fieldBlock('Reason', app.hidden_reason) : ''}
-      </div>
-    </div>` : ''}
+
 
     <div class="review-panel">
       <h3>Review</h3>
@@ -944,10 +986,10 @@ function renderDetail() {
     if (!s) return;
     const n = +s.dataset.star;
     const rev = getReview(currentId);
-    // clicking same star deselects
     rev.rating = rev.rating === n ? 0 : n;
     saveStorage();
-    renderDetail();
+    syncStars(rev.rating);
+    syncClearBtn(rev);
     renderList();
   });
 
@@ -960,7 +1002,8 @@ function renderDetail() {
       if (rev.tags.includes(tag)) rev.tags = rev.tags.filter(t => t !== tag);
       else rev.tags.push(tag);
       saveStorage();
-      renderDetail();
+      btn.classList.toggle('on', rev.tags.includes(tag));
+      syncClearBtn(rev);
       renderList();
     });
   });
@@ -970,6 +1013,7 @@ function renderDetail() {
     const rev = getReview(currentId);
     rev.comment = document.getElementById('commentBox').value;
     saveStorage();
+    syncClearBtn(rev);
     renderList();
     const ind = document.getElementById('saveIndicator');
     ind.classList.add('visible');
@@ -985,7 +1029,10 @@ function renderDetail() {
       rev.comment = '';
       rev.tags = [];
       saveStorage();
-      renderDetail();
+      syncStars(0);
+      document.querySelectorAll('.tag-toggle').forEach(b => b.classList.remove('on'));
+      document.getElementById('commentBox').value = '';
+      syncClearBtn(rev);
       renderList();
     });
   }
@@ -995,10 +1042,45 @@ function renderDetail() {
     const rev = getReview(currentId);
     rev.comment = document.getElementById('commentBox').value;
     saveStorage();
+    syncClearBtn(rev);
     renderList();
   });
 
   scroll.scrollTop = 0;
+}
+
+function syncStars(rating) {
+  document.querySelectorAll('.star-btn').forEach(b => {
+    b.classList.toggle('lit', +b.dataset.star <= rating);
+  });
+}
+
+function syncClearBtn(rev) {
+  const hasReview = rev.rating > 0 || (rev.comment && rev.comment.trim()) || (rev.tags && rev.tags.length);
+  const actions = document.querySelector('.review-actions');
+  if (!actions) return;
+  let clearBtn = document.getElementById('clearReviewBtn');
+  if (hasReview && !clearBtn) {
+    clearBtn = document.createElement('button');
+    clearBtn.className = 'btn danger';
+    clearBtn.id = 'clearReviewBtn';
+    clearBtn.textContent = 'Clear Review';
+    clearBtn.addEventListener('click', () => {
+      const r = getReview(currentId);
+      r.rating = 0;
+      r.comment = '';
+      r.tags = [];
+      saveStorage();
+      syncStars(0);
+      document.querySelectorAll('.tag-toggle').forEach(b => b.classList.remove('on'));
+      document.getElementById('commentBox').value = '';
+      syncClearBtn(r);
+      renderList();
+    });
+    actions.appendChild(clearBtn);
+  } else if (!hasReview && clearBtn) {
+    clearBtn.remove();
+  }
 }
 
 function fieldBlock(label, value, full = false) {
@@ -1308,6 +1390,7 @@ function showApp() {
   document.getElementById('changeFileBtn').style.display = '';
   document.getElementById('exportBtn').style.display = '';
   currentId = null;
+  syncFilterButtons();
   renderList();
   renderDetail();
 }
@@ -1351,10 +1434,40 @@ function updateStorageNotice() {
 document.getElementById('filterBar').addEventListener('click', e => {
   const btn = e.target.closest('.filter-btn');
   if (!btn) return;
-  currentFilter = btn.dataset.filter;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+  const f = btn.dataset.filter;
+
+  if (f === 'all') {
+    activeFilters.clear();
+  } else {
+    // 'hidden' and 'not-hidden' are mutually exclusive
+    if (f === 'hidden' && activeFilters.has(f)) {
+      activeFilters.delete('hidden');
+    } else if (f === 'hidden') {
+      activeFilters.add('hidden');
+      activeFilters.delete('not-hidden');
+    } else if (f === 'not-hidden' && activeFilters.has(f)) {
+      activeFilters.delete('not-hidden');
+    } else if (f === 'not-hidden') {
+      activeFilters.add('not-hidden');
+      activeFilters.delete('hidden');
+    } else {
+      // Toggle all other filters
+      if (activeFilters.has(f)) activeFilters.delete(f);
+      else activeFilters.add(f);
+    }
+  }
+
+  syncFilterButtons();
   renderList();
 });
+
+function syncFilterButtons() {
+  const allActive = activeFilters.size === 0;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    const f = b.dataset.filter;
+    b.classList.toggle('active', f === 'all' ? allActive : activeFilters.has(f));
+  });
+}
 
 document.getElementById('searchBox').addEventListener('input', e => {
   currentSearch = e.target.value;
