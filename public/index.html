@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Application Reviewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3250;
+      --accent: #4f6ef7;
+      --accent-dim: #2d3f8a;
+      --text: #e2e4f0;
+      --text-dim: #7b82a8;
+      --green: #3ecf6e;
+      --yellow: #f5c842;
+      --red: #f25c5c;
+      --orange: #f5874e;
+      --purple: #a78bfa;
+      --tag-spam: #7f1d1d;
+      --tag-spam-border: #f25c5c;
+      --tag-nonprofit: #14532d;
+      --tag-nonprofit-border: #3ecf6e;
+      --tag-private: #1e3a5f;
+      --tag-private-border: #4f6ef7;
+      --tag-duplicate: #4a1d96;
+      --tag-duplicate-border: #a78bfa;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1rem; font-weight: 600; letter-spacing: .02em; }
+    header .stats {
+      margin-left: auto;
+      display: flex;
+      gap: 16px;
+      font-size: .78rem;
+      color: var(--text-dim);
+    }
+    header .stats span b { color: var(--text); }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: .8rem;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--border); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.primary:hover { background: #3a58e0; }
+    .btn.danger { border-color: var(--red); color: var(--red); }
+    .btn.danger:hover { background: rgba(242,92,92,.12); }
+
+    /* ── Layout ── */
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Landing ── */
+    #landing {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 40px;
+    }
+    #landing h2 { font-size: 1.4rem; color: var(--text-dim); font-weight: 400; }
+    .drop-zone {
+      width: 420px;
+      max-width: 100%;
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(79,110,247,.06);
+    }
+    .drop-zone svg { color: var(--text-dim); margin-bottom: 12px; }
+    .drop-zone p { color: var(--text-dim); font-size: .9rem; }
+    .drop-zone p b { color: var(--text); }
+    #fileInput { display: none; }
+
+    /* ── Sidebar list ── */
+    #sidebar {
+      width: 300px;
+      min-width: 260px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .sidebar-header-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sidebar-header-top h2 { font-size: .85rem; font-weight: 600; flex: 1; }
+    #filterBar {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      font-size: .7rem;
+      padding: 3px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    #searchBox {
+      width: 100%;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: .8rem;
+      outline: none;
+    }
+    #searchBox:focus { border-color: var(--accent); }
+    #appList {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+    }
+    .app-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 3px;
+      border: 1px solid transparent;
+      transition: background .12s, border-color .12s;
+    }
+    .app-item:hover { background: var(--surface2); }
+    .app-item.active { background: var(--accent-dim); border-color: var(--accent); }
+    .app-item-name {
+      font-size: .82rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .app-item-title {
+      font-size: .72rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    .app-item-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 5px;
+      flex-wrap: wrap;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.not-viewed { background: var(--text-dim); }
+    .status-dot.viewed { background: var(--yellow); }
+    .status-dot.reviewed { background: var(--green); }
+    .status-label {
+      font-size: .68rem;
+      color: var(--text-dim);
+    }
+    .tag-pill {
+      font-size: .62rem;
+      padding: 1px 6px;
+      border-radius: 99px;
+      font-weight: 600;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+    .tag-pill.spam { background: var(--tag-spam); border: 1px solid var(--tag-spam-border); color: var(--tag-spam-border); }
+    .tag-pill.nonprofit { background: var(--tag-nonprofit); border: 1px solid var(--tag-nonprofit-border); color: var(--tag-nonprofit-border); }
+    .tag-pill.private { background: var(--tag-private); border: 1px solid var(--tag-private-border); color: var(--tag-private-border); }
+    .tag-pill.duplicate { background: var(--tag-duplicate); border: 1px solid var(--tag-duplicate-border); color: var(--tag-duplicate-border); }
+
+    .stars-mini {
+      font-size: .72rem;
+      color: var(--yellow);
+      letter-spacing: .05em;
+    }
+
+    /* ── Detail pane ── */
+    #detail {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .detail-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--surface);
+    }
+    .nav-counter { font-size: .82rem; color: var(--text-dim); }
+    .detail-toolbar .spacer { flex: 1; }
+
+    .detail-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .detail-hero h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .detail-hero .subtitle {
+      font-size: .9rem;
+      color: var(--accent);
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+    .detail-hero .meta-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: .78rem;
+      color: var(--text-dim);
+    }
+    .detail-hero .meta-row a { color: var(--accent); text-decoration: none; }
+    .detail-hero .meta-row a:hover { text-decoration: underline; }
+
+    .section-label {
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+    .field-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .field-block .field-label {
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .field-block .field-value {
+      font-size: .85rem;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .fields-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .fields-grid .field-block.full { grid-column: 1 / -1; }
+
+    /* ── Review panel ── */
+    .review-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 22px;
+    }
+    .review-panel h3 { font-size: .9rem; font-weight: 600; margin-bottom: 16px; }
+
+    .review-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .review-row label { font-size: .75rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; }
+
+    /* Stars */
+    .star-row { display: flex; gap: 6px; }
+    .star-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.5rem;
+      color: var(--border);
+      transition: color .1s, transform .1s;
+      padding: 0;
+      line-height: 1;
+    }
+    .star-btn:hover, .star-btn.lit { color: var(--yellow); }
+    .star-btn:hover { transform: scale(1.15); }
+
+    /* Tags */
+    .tag-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tag-toggle {
+      padding: 5px 12px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      font-size: .75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .tag-toggle[data-tag="spam"].on { background: var(--tag-spam); border-color: var(--tag-spam-border); color: var(--tag-spam-border); }
+    .tag-toggle[data-tag="nonprofit"].on { background: var(--tag-nonprofit); border-color: var(--tag-nonprofit-border); color: var(--tag-nonprofit-border); }
+    .tag-toggle[data-tag="private"].on { background: var(--tag-private); border-color: var(--tag-private-border); color: var(--tag-private-border); }
+    .tag-toggle[data-tag="duplicate"].on { background: var(--tag-duplicate); border-color: var(--tag-duplicate-border); color: var(--tag-duplicate-border); }
+
+    textarea.comment-box {
+      width: 100%;
+      min-height: 80px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: .85rem;
+      font-family: inherit;
+      resize: vertical;
+      outline: none;
+      transition: border-color .15s;
+    }
+    textarea.comment-box:focus { border-color: var(--accent); }
+
+    .review-actions { display: flex; gap: 10px; align-items: center; }
+    .save-indicator {
+      font-size: .75rem;
+      color: var(--green);
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .save-indicator.visible { opacity: 1; }
+
+    /* ── Empty state ── */
+    .empty-detail {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      font-size: .9rem;
+    }
+
+    /* ── Scrollbars ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    /* ── Responsive ── */
+    @media (max-width: 700px) {
+      #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 40vh; }
+      .app-body { flex-direction: column; }
+      .fields-grid { grid-template-columns: 1fr; }
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Application Reviewer</h1>
+  <div class="stats" id="headerStats"></div>
+  <button class="btn" id="changeFileBtn" style="display:none">Load CSV</button>
+  <button class="btn primary" id="exportBtn" style="display:none">Export CSV</button>
+</header>
+
+<div class="app-body">
+
+  <!-- Landing -->
+  <div id="landing">
+    <h2>Load a CSV file to begin reviewing</h2>
+    <div class="drop-zone" id="dropZone">
+      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p><b>Click to choose</b> or drag &amp; drop a CSV file</p>
+      <p style="margin-top:6px;font-size:.72rem">Supports original export format and previously exported review files</p>
+    </div>
+    <input type="file" id="fileInput" accept=".csv">
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar" class="hidden">
+    <div class="sidebar-header">
+      <div class="sidebar-header-top">
+        <h2 id="sidebarTitle">Applications</h2>
+      </div>
+      <div id="filterBar">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="not-viewed">Not Viewed</button>
+        <button class="filter-btn" data-filter="viewed">Viewed</button>
+        <button class="filter-btn" data-filter="reviewed">Reviewed</button>
+        <button class="filter-btn" data-filter="spam">Spam</button>
+        <button class="filter-btn" data-filter="nonprofit">Nonprofit</button>
+        <button class="filter-btn" data-filter="private">Private</button>
+        <button class="filter-btn" data-filter="duplicate">Duplicate</button>
+      </div>
+      <input type="text" id="searchBox" placeholder="Search name or title…">
+    </div>
+    <div id="appList"></div>
+  </div>
+
+  <!-- Detail pane -->
+  <div id="detail" class="hidden">
+    <div class="detail-toolbar">
+      <button class="btn" id="prevBtn">&#8592; Prev</button>
+      <span class="nav-counter" id="navCounter"></span>
+      <button class="btn" id="nextBtn">Next &#8594;</button>
+      <div class="spacer"></div>
+    </div>
+    <div class="detail-scroll" id="detailScroll">
+      <div class="empty-detail" id="emptyDetail">Select an application from the list</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// CSV Parser — handles quoted multiline fields
+// ─────────────────────────────────────────────
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  let i = 0;
+
+  const push = () => { row.push(field); field = ''; };
+
+  while (i < text.length) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (inQuotes) {
+      if (ch === '"' && next === '"') { field += '"'; i += 2; continue; }
+      if (ch === '"') { inQuotes = false; i++; continue; }
+      field += ch;
+    } else {
+      if (ch === '"') { inQuotes = true; i++; continue; }
+      if (ch === ',') { push(); i++; continue; }
+      if (ch === '\r' && next === '\n') { push(); rows.push(row); row = []; i += 2; continue; }
+      if (ch === '\n') { push(); rows.push(row); row = []; i++; continue; }
+      field += ch;
+    }
+    i++;
+  }
+  // last field/row
+  if (field !== '' || row.length > 0) { push(); rows.push(row); }
+  // drop empty trailing row
+  if (rows.length > 0 && rows[rows.length - 1].every(c => c === '')) rows.pop();
+  return rows;
+}
+
+function csvToObjects(rows) {
+  if (rows.length < 2) return [];
+  const headers = rows[0];
+  return rows.slice(1).map(r => {
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = r[i] ?? ''; });
+    return obj;
+  });
+}
+
+function serializeCSV(rows) {
+  return rows.map(row =>
+    row.map(cell => {
+      const s = String(cell ?? '');
+      return (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r'))
+        ? '"' + s.replace(/"/g, '""') + '"'
+        : s;
+    }).join(',')
+  ).join('\r\n');
+}
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+const STORAGE_KEY = 'appreviewer_v1';
+const REVIEW_COLS = ['_review_rating', '_review_comment', '_review_tags', '_review_viewed'];
+
+let applications = [];   // array of raw data objects
+let reviews = {};        // { [id]: { rating, comment, tags: [], viewed } }
+let currentFilter = 'all';
+let currentSearch = '';
+let currentId = null;
+
+function getAppId(app, idx) {
+  return app.id && app.id.trim() ? app.id.trim() : `__row_${idx}`;
+}
+
+function loadStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) reviews = JSON.parse(raw);
+  } catch (e) { reviews = {}; }
+}
+
+function saveStorage() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(reviews));
+}
+
+function getReview(id) {
+  if (!reviews[id]) reviews[id] = { rating: 0, comment: '', tags: [], viewed: false };
+  return reviews[id];
+}
+
+function getStatus(id) {
+  const r = reviews[id];
+  if (!r || !r.viewed) return 'not-viewed';
+  if (r.rating > 0 || (r.comment && r.comment.trim())) return 'reviewed';
+  return 'viewed';
+}
+
+// ─────────────────────────────────────────────
+// Derived / filtered list
+// ─────────────────────────────────────────────
+function getFilteredIds() {
+  return applications
+    .map((app, idx) => ({ app, idx, id: getAppId(app, idx) }))
+    .filter(({ app, id }) => {
+      const r = reviews[id] || {};
+      const status = getStatus(id);
+      const tags = r.tags || [];
+      const search = currentSearch.toLowerCase();
+
+      if (currentFilter === 'not-viewed' && status !== 'not-viewed') return false;
+      if (currentFilter === 'viewed' && status !== 'viewed') return false;
+      if (currentFilter === 'reviewed' && status !== 'reviewed') return false;
+      if (currentFilter === 'spam' && !tags.includes('spam')) return false;
+      if (currentFilter === 'nonprofit' && !tags.includes('nonprofit')) return false;
+      if (currentFilter === 'private' && !tags.includes('private')) return false;
+      if (currentFilter === 'duplicate' && !tags.includes('duplicate')) return false;
+
+      if (search) {
+        const name = (app.name || '').toLowerCase();
+        const title = (app.title || '').toLowerCase();
+        if (!name.includes(search) && !title.includes(search)) return false;
+      }
+      return true;
+    })
+    .map(({ id, idx }) => ({ id, idx }));
+}
+
+// ─────────────────────────────────────────────
+// Render list
+// ─────────────────────────────────────────────
+function renderList() {
+  const filtered = getFilteredIds();
+  const list = document.getElementById('appList');
+  list.innerHTML = '';
+
+  filtered.forEach(({ id, idx }) => {
+    const app = applications[idx];
+    const r = reviews[id] || {};
+    const status = getStatus(id);
+    const tags = r.tags || [];
+
+    const el = document.createElement('div');
+    el.className = 'app-item' + (id === currentId ? ' active' : '');
+    el.dataset.id = id;
+
+    const starsStr = r.rating > 0 ? '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating) : '';
+
+    el.innerHTML = `
+      <div class="app-item-name">${esc(app.name || '(no name)')}</div>
+      <div class="app-item-title">${esc(app.title || '(no title)')}</div>
+      <div class="app-item-meta">
+        <span class="status-dot ${status}"></span>
+        <span class="status-label">${status.replace('-', ' ')}</span>
+        ${starsStr ? `<span class="stars-mini">${starsStr}</span>` : ''}
+        ${tags.map(t => `<span class="tag-pill ${t}">${t}</span>`).join('')}
+      </div>`;
+
+    el.addEventListener('click', () => openApp(id));
+    list.appendChild(el);
+  });
+
+  updateHeaderStats();
+}
+
+// ─────────────────────────────────────────────
+// Open application
+// ─────────────────────────────────────────────
+function openApp(id) {
+  currentId = id;
+
+  // Mark as viewed
+  const r = getReview(id);
+  r.viewed = true;
+  saveStorage();
+
+  renderList();
+  renderDetail();
+}
+
+// ─────────────────────────────────────────────
+// Render detail
+// ─────────────────────────────────────────────
+function renderDetail() {
+  const scroll = document.getElementById('detailScroll');
+  const emptyEl = document.getElementById('emptyDetail');
+
+  if (!currentId) {
+    scroll.innerHTML = '';
+    scroll.appendChild(emptyEl);
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+
+  const idx = applications.findIndex((a, i) => getAppId(a, i) === currentId);
+  const app = applications[idx];
+  const r = getReview(currentId);
+
+  // Nav counter based on filtered list
+  const filtered = getFilteredIds();
+  const posInFiltered = filtered.findIndex(x => x.id === currentId);
+  const navCounter = document.getElementById('navCounter');
+  navCounter.textContent = posInFiltered >= 0
+    ? `${posInFiltered + 1} / ${filtered.length} shown  (${idx + 1} / ${applications.length} total)`
+    : `${idx + 1} / ${applications.length}`;
+
+  // Build extra fields (extra_question_N / extra_answer_N pairs)
+  const extras = [];
+  for (let n = 1; n <= 10; n++) {
+    const q = app[`extra_question_${n}`];
+    const a = app[`extra_answer_${n}`];
+    if (q && q.trim()) extras.push({ q, a: a || '' });
+  }
+
+  // Known displayed columns — everything else shown in a generic section
+  const knownCols = new Set([
+    'name','title','about_project','use_for_money','about_me',
+    'url','email','phone','chapter_name','id','created_at','funded_on',
+    'rss_feed_url','hidden_at','hidden_reason',
+    ...Array.from({length:10}, (_,i)=>`extra_question_${i+1}`),
+    ...Array.from({length:10}, (_,i)=>`extra_answer_${i+1}`),
+    ...REVIEW_COLS,
+  ]);
+
+  const unknownFields = Object.entries(app).filter(([k, v]) => !knownCols.has(k) && v && v.trim());
+
+  scroll.innerHTML = `
+    <div class="detail-hero">
+      <h2>${esc(app.name || '(no name)')}</h2>
+      <div class="subtitle">${esc(app.title || '')}</div>
+      <div class="meta-row">
+        ${app.chapter_name ? `<span>Chapter: <b>${esc(app.chapter_name)}</b></span>` : ''}
+        ${app.id ? `<span>ID: <b>${esc(app.id)}</b></span>` : ''}
+        ${app.created_at ? `<span>Submitted: <b>${esc(app.created_at)}</b></span>` : ''}
+        ${app.funded_on ? `<span>Funded: <b>${esc(app.funded_on)}</b></span>` : ''}
+        ${app.email ? `<span>Email: <a href="mailto:${esc(app.email)}">${esc(app.email)}</a></span>` : ''}
+        ${app.phone ? `<span>Phone: <b>${esc(app.phone)}</b></span>` : ''}
+        ${app.url ? `<span>URL: <a href="${esc(app.url)}" target="_blank" rel="noopener">${esc(app.url)}</a></span>` : ''}
+        ${app.rss_feed_url ? `<span>RSS: <a href="${esc(app.rss_feed_url)}" target="_blank" rel="noopener">Feed</a></span>` : ''}
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Application</div>
+      <div class="fields-grid">
+        ${fieldBlock('About the project', app.about_project, true)}
+        ${fieldBlock('How money will be used', app.use_for_money, true)}
+        ${fieldBlock('About me', app.about_me, true)}
+      </div>
+    </div>
+
+    ${extras.length ? `
+    <div>
+      <div class="section-label">Extra Questions</div>
+      <div class="fields-grid">
+        ${extras.map(({q, a}) => `
+          <div class="field-block full">
+            <div class="field-label">${esc(q)}</div>
+            <div class="field-value">${esc(a)}</div>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    ${unknownFields.length ? `
+    <div>
+      <div class="section-label">Additional Fields</div>
+      <div class="fields-grid">
+        ${unknownFields.map(([k,v]) => fieldBlock(k, v)).join('')}
+      </div>
+    </div>` : ''}
+
+    ${app.hidden_at || app.hidden_reason ? `
+    <div>
+      <div class="section-label">Hidden</div>
+      <div class="fields-grid">
+        ${app.hidden_at ? fieldBlock('Hidden at', app.hidden_at) : ''}
+        ${app.hidden_reason ? fieldBlock('Reason', app.hidden_reason) : ''}
+      </div>
+    </div>` : ''}
+
+    <div class="review-panel">
+      <h3>Review</h3>
+
+      <div class="review-row">
+        <label>Rating</label>
+        <div class="star-row" id="starRow">
+          ${[1,2,3,4,5].map(n => `<button class="star-btn${r.rating >= n ? ' lit' : ''}" data-star="${n}">★</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="review-row">
+        <label>Tags</label>
+        <div class="tag-row">
+          ${['spam','nonprofit','private','duplicate'].map(tag =>
+            `<button class="tag-toggle${(r.tags||[]).includes(tag) ? ' on' : ''}" data-tag="${tag}">${tag}</button>`
+          ).join('')}
+        </div>
+      </div>
+
+      <div class="review-row">
+        <label>Comments</label>
+        <textarea class="comment-box" id="commentBox" placeholder="Optional notes…">${esc(r.comment || '')}</textarea>
+      </div>
+
+      <div class="review-actions">
+        <button class="btn primary" id="saveReviewBtn">Save Review</button>
+        <span class="save-indicator" id="saveIndicator">Saved!</span>
+        ${r.rating > 0 || (r.comment && r.comment.trim()) || (r.tags && r.tags.length) ? `<button class="btn danger" id="clearReviewBtn">Clear Review</button>` : ''}
+      </div>
+    </div>
+  `;
+
+  // Star interactions
+  const starRow = document.getElementById('starRow');
+  starRow.addEventListener('mouseover', e => {
+    const s = e.target.closest('.star-btn');
+    if (!s) return;
+    const n = +s.dataset.star;
+    starRow.querySelectorAll('.star-btn').forEach(b => {
+      b.classList.toggle('lit', +b.dataset.star <= n);
+    });
+  });
+  starRow.addEventListener('mouseleave', () => {
+    const cur = getReview(currentId).rating;
+    starRow.querySelectorAll('.star-btn').forEach(b => {
+      b.classList.toggle('lit', +b.dataset.star <= cur);
+    });
+  });
+  starRow.addEventListener('click', e => {
+    const s = e.target.closest('.star-btn');
+    if (!s) return;
+    const n = +s.dataset.star;
+    const rev = getReview(currentId);
+    // clicking same star deselects
+    rev.rating = rev.rating === n ? 0 : n;
+    saveStorage();
+    renderDetail();
+    renderList();
+  });
+
+  // Tag toggles
+  document.querySelectorAll('.tag-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tag = btn.dataset.tag;
+      const rev = getReview(currentId);
+      if (!rev.tags) rev.tags = [];
+      if (rev.tags.includes(tag)) rev.tags = rev.tags.filter(t => t !== tag);
+      else rev.tags.push(tag);
+      saveStorage();
+      renderDetail();
+      renderList();
+    });
+  });
+
+  // Save
+  document.getElementById('saveReviewBtn').addEventListener('click', () => {
+    const rev = getReview(currentId);
+    rev.comment = document.getElementById('commentBox').value;
+    saveStorage();
+    renderList();
+    const ind = document.getElementById('saveIndicator');
+    ind.classList.add('visible');
+    setTimeout(() => ind.classList.remove('visible'), 1800);
+  });
+
+  // Clear
+  const clearBtn = document.getElementById('clearReviewBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      const rev = getReview(currentId);
+      rev.rating = 0;
+      rev.comment = '';
+      rev.tags = [];
+      saveStorage();
+      renderDetail();
+      renderList();
+    });
+  }
+
+  // Auto-save comment on blur
+  document.getElementById('commentBox').addEventListener('blur', () => {
+    const rev = getReview(currentId);
+    rev.comment = document.getElementById('commentBox').value;
+    saveStorage();
+    renderList();
+  });
+
+  scroll.scrollTop = 0;
+}
+
+function fieldBlock(label, value, full = false) {
+  if (!value || !value.trim()) return '';
+  return `<div class="field-block${full ? ' full' : ''}">
+    <div class="field-label">${esc(label)}</div>
+    <div class="field-value">${esc(value)}</div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────
+// Navigation
+// ─────────────────────────────────────────────
+function navigate(dir) {
+  const filtered = getFilteredIds();
+  if (!filtered.length) return;
+
+  let pos = filtered.findIndex(x => x.id === currentId);
+  if (pos < 0) pos = dir > 0 ? -1 : filtered.length;
+
+  const next = pos + dir;
+  if (next < 0 || next >= filtered.length) return;
+  openApp(filtered[next].id);
+
+  // Scroll list item into view
+  const el = document.querySelector(`.app-item[data-id="${filtered[next].id}"]`);
+  if (el) el.scrollIntoView({ block: 'nearest' });
+}
+
+document.getElementById('prevBtn').addEventListener('click', () => navigate(-1));
+document.getElementById('nextBtn').addEventListener('click', () => navigate(1));
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); navigate(-1); }
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); navigate(1); }
+});
+
+// ─────────────────────────────────────────────
+// Stats
+// ─────────────────────────────────────────────
+function updateHeaderStats() {
+  if (!applications.length) { document.getElementById('headerStats').innerHTML = ''; return; }
+  const total = applications.length;
+  let notViewed = 0, viewed = 0, reviewed = 0;
+  applications.forEach((app, idx) => {
+    const id = getAppId(app, idx);
+    const s = getStatus(id);
+    if (s === 'not-viewed') notViewed++;
+    else if (s === 'viewed') viewed++;
+    else reviewed++;
+  });
+  document.getElementById('headerStats').innerHTML = `
+    <span><b>${total}</b> total</span>
+    <span><b>${notViewed}</b> not viewed</span>
+    <span><b>${viewed}</b> viewed</span>
+    <span><b>${reviewed}</b> reviewed</span>
+  `;
+  document.getElementById('sidebarTitle').textContent =
+    `Applications (${getFilteredIds().length})`;
+}
+
+// ─────────────────────────────────────────────
+// Load CSV
+// ─────────────────────────────────────────────
+function loadCSV(text) {
+  const rows = parseCSV(text);
+  if (rows.length < 2) { alert('CSV appears empty or has no data rows.'); return; }
+
+  const headers = rows[0];
+  const objs = csvToObjects(rows);
+
+  // Check if this is an export with review columns
+  const hasReviewCols = REVIEW_COLS.some(c => headers.includes(c));
+
+  applications = objs.map(obj => {
+    // Strip review columns from the application data
+    const clean = {};
+    Object.entries(obj).forEach(([k, v]) => {
+      if (!REVIEW_COLS.includes(k)) clean[k] = v;
+    });
+    return clean;
+  });
+
+  // If reimporting, prefill reviews
+  if (hasReviewCols) {
+    objs.forEach((obj, idx) => {
+      const id = getAppId(applications[idx], idx);
+      const rev = getReview(id);
+
+      const ratingVal = obj['_review_rating'];
+      if (ratingVal !== undefined && ratingVal !== '') {
+        const n = parseInt(ratingVal, 10);
+        if (!isNaN(n)) rev.rating = n;
+      }
+      const commentVal = obj['_review_comment'];
+      if (commentVal !== undefined) rev.comment = commentVal;
+
+      const tagsVal = obj['_review_tags'];
+      if (tagsVal !== undefined && tagsVal !== '') {
+        rev.tags = tagsVal.split('|').map(t => t.trim()).filter(Boolean);
+      }
+
+      const viewedVal = obj['_review_viewed'];
+      if (viewedVal === 'true' || viewedVal === '1') rev.viewed = true;
+    });
+    saveStorage();
+  }
+
+  showApp();
+}
+
+// ─────────────────────────────────────────────
+// Export CSV
+// ─────────────────────────────────────────────
+function exportCSV() {
+  if (!applications.length) return;
+
+  const originalHeaders = Object.keys(applications[0]);
+  const headers = [...originalHeaders, ...REVIEW_COLS];
+
+  const rows = [headers];
+  applications.forEach((app, idx) => {
+    const id = getAppId(app, idx);
+    const r = reviews[id] || {};
+    const row = originalHeaders.map(h => app[h] ?? '');
+    row.push(
+      r.rating != null ? String(r.rating) : '0',
+      r.comment || '',
+      (r.tags || []).join('|'),
+      r.viewed ? 'true' : 'false'
+    );
+    rows.push(row);
+  });
+
+  const csv = serializeCSV(rows);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `applications_reviewed_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─────────────────────────────────────────────
+// UI show/hide
+// ─────────────────────────────────────────────
+function showApp() {
+  document.getElementById('landing').classList.add('hidden');
+  document.getElementById('sidebar').classList.remove('hidden');
+  document.getElementById('detail').classList.remove('hidden');
+  document.getElementById('changeFileBtn').style.display = '';
+  document.getElementById('exportBtn').style.display = '';
+  currentId = null;
+  renderList();
+  renderDetail();
+}
+
+function showLanding() {
+  document.getElementById('landing').classList.remove('hidden');
+  document.getElementById('sidebar').classList.add('hidden');
+  document.getElementById('detail').classList.add('hidden');
+  document.getElementById('changeFileBtn').style.display = 'none';
+  document.getElementById('exportBtn').style.display = 'none';
+  document.getElementById('headerStats').innerHTML = '';
+}
+
+// ─────────────────────────────────────────────
+// Filter / search
+// ─────────────────────────────────────────────
+document.getElementById('filterBar').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn');
+  if (!btn) return;
+  currentFilter = btn.dataset.filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+  renderList();
+});
+
+document.getElementById('searchBox').addEventListener('input', e => {
+  currentSearch = e.target.value;
+  renderList();
+});
+
+// ─────────────────────────────────────────────
+// File input / drag-drop
+// ─────────────────────────────────────────────
+function handleFile(file) {
+  if (!file || !file.name.endsWith('.csv')) { alert('Please select a .csv file.'); return; }
+  const reader = new FileReader();
+  reader.onload = e => loadCSV(e.target.result);
+  reader.readAsText(file);
+}
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  handleFile(e.dataTransfer.files[0]);
+});
+
+document.getElementById('changeFileBtn').addEventListener('click', () => {
+  // Reset and go back to landing — reviews persist in localStorage
+  applications = [];
+  currentId = null;
+  showLanding();
+  // reuse same input
+  fileInput.value = '';
+  fileInput.click();
+});
+
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+loadStorage();
+showLanding();
+</script>
+</body>
+</html>
