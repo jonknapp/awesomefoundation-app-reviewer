@@ -1298,9 +1298,10 @@ function updateHeaderStats() {
 // ─────────────────────────────────────────────
 // Load CSV
 // ─────────────────────────────────────────────
-function loadCSV(text) {
+function loadCSV(text, { silent = false } = {}) {
   const rows = parseCSV(text);
   if (rows.length < 2) { alert('CSV appears empty or has no data rows.'); return; }
+  if (!silent) saveCSVToIDB(text);
 
   const headers = rows[0];
   const objs = csvToObjects(rows);
@@ -1651,11 +1652,10 @@ dropZone.addEventListener('drop', e => {
 });
 
 document.getElementById('changeFileBtn').addEventListener('click', () => {
-  // Reset and go back to landing — reviews persist in localStorage
   applications = [];
   currentId = null;
+  clearCSVFromIDB();
   showLanding();
-  // reuse same input
   fileInput.value = '';
   fileInput.click();
 });
@@ -1666,6 +1666,7 @@ document.getElementById('clearStorageBtn').addEventListener('click', () => {
   if (!confirm('Clear all saved review data? This cannot be undone.')) return;
   reviews = {};
   localStorage.removeItem(STORAGE_KEY);
+  clearCSVFromIDB();
   updateStorageNotice();
 });
 
@@ -1681,10 +1682,60 @@ function esc(str) {
 }
 
 // ─────────────────────────────────────────────
+// IndexedDB — CSV persistence
+// ─────────────────────────────────────────────
+const IDB_NAME = 'appreviewer';
+const IDB_STORE = 'csv';
+const IDB_KEY = 'current';
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function saveCSVToIDB(text) {
+  try {
+    const db = await openIDB();
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(text, IDB_KEY);
+  } catch (e) { console.warn('IDB save failed', e); }
+}
+
+async function loadCSVFromIDB() {
+  try {
+    const db = await openIDB();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = e => resolve(e.target.result ?? null);
+      req.onerror = e => reject(e.target.error);
+    });
+  } catch (e) { console.warn('IDB load failed', e); return null; }
+}
+
+async function clearCSVFromIDB() {
+  try {
+    const db = await openIDB();
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(IDB_KEY);
+  } catch (e) { console.warn('IDB clear failed', e); }
+}
+
+// ─────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────
 loadStorage();
-showLanding(); // calls updateStorageNotice internally
+(async () => {
+  const saved = await loadCSVFromIDB();
+  if (saved) {
+    loadCSV(saved, { silent: true });
+  } else {
+    showLanding();
+  }
+})();
 </script>
 </body>
 </html>
