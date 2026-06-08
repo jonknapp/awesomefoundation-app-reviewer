@@ -447,6 +447,82 @@
 
     .hidden { display: none !important; }
 
+    /* ── Keyboard shortcuts modal ── */
+    #shortcutsOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: 20px;
+    }
+    #shortcutsModal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      width: 380px;
+      max-width: 100%;
+      box-shadow: 0 24px 64px rgba(0,0,0,.5);
+      overflow: hidden;
+    }
+    .shortcuts-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .shortcuts-header h2 { font-size: .95rem; font-weight: 600; }
+    .shortcuts-close {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    .shortcuts-close:hover { color: var(--text); }
+    .shortcuts-table {
+      padding: 14px 20px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .shortcuts-group-label {
+      font-size: .65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: var(--text-dim);
+      margin-top: 12px;
+      margin-bottom: 4px;
+    }
+    .shortcuts-group-label:first-child { margin-top: 0; }
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: .83rem;
+    }
+    .shortcut-desc { color: var(--text-dim); }
+    .shortcut-keys { display: flex; gap: 4px; }
+    kbd {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-family: inherit;
+      font-size: .78rem;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+
     /* ── Conflict modal ── */
     #conflictOverlay {
       position: fixed;
@@ -627,6 +703,26 @@
 
 </div>
 
+<!-- Keyboard shortcuts modal -->
+<div id="shortcutsOverlay" class="hidden">
+  <div id="shortcutsModal">
+    <div class="shortcuts-header">
+      <h2>Keyboard shortcuts</h2>
+      <button class="shortcuts-close" id="shortcutsClose">&#x2715;</button>
+    </div>
+    <div class="shortcuts-table">
+      <div class="shortcuts-group-label">Navigation</div>
+      <div class="shortcut-row"><span class="shortcut-desc">Previous application</span><span class="shortcut-keys"><kbd>p</kbd><kbd>&#8592;</kbd><kbd>&#8593;</kbd></span></div>
+      <div class="shortcut-row"><span class="shortcut-desc">Next application</span><span class="shortcut-keys"><kbd>n</kbd><kbd>&#8594;</kbd><kbd>&#8595;</kbd></span></div>
+      <div class="shortcuts-group-label">Review</div>
+      <div class="shortcut-row"><span class="shortcut-desc">Set rating &amp; advance</span><span class="shortcut-keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><kbd>5</kbd></span></div>
+      <div class="shortcuts-group-label">General</div>
+      <div class="shortcut-row"><span class="shortcut-desc">Show this dialog</span><span class="shortcut-keys"><kbd>?</kbd></span></div>
+      <div class="shortcut-row"><span class="shortcut-desc">Close dialog</span><span class="shortcut-keys"><kbd>Esc</kbd></span></div>
+    </div>
+  </div>
+</div>
+
 <!-- Conflict resolution modal -->
 <div id="conflictOverlay" class="hidden">
   <div id="conflictModal">
@@ -714,6 +810,7 @@ let reviews = {};        // { [id]: { rating, comment, tags: [], viewed } }
 let activeFilters = new Set(['not-hidden', 'not-reviewed']); // default: hide hidden and already-reviewed
 let currentSearch = '';
 let currentId = null;
+let commentDirty = false;
 
 function getAppId(app, idx) {
   return app.id && app.id.trim() ? app.id.trim() : `__row_${idx}`;
@@ -823,7 +920,14 @@ function renderList() {
 // ─────────────────────────────────────────────
 // Open application
 // ─────────────────────────────────────────────
+function confirmNavigate() {
+  if (!commentDirty) return true;
+  return confirm('You have unsaved comment changes. Discard and continue?');
+}
+
 function openApp(id) {
+  if (id !== currentId && !confirmNavigate()) return;
+  commentDirty = false;
   currentId = id;
 
   // Mark as viewed
@@ -1017,6 +1121,7 @@ function renderDetail() {
   document.getElementById('saveReviewBtn').addEventListener('click', () => {
     const rev = getReview(currentId);
     rev.comment = document.getElementById('commentBox').value;
+    commentDirty = false;
     saveStorage();
     syncClearBtn(rev);
     renderList();
@@ -1033,6 +1138,7 @@ function renderDetail() {
       rev.rating = 0;
       rev.comment = '';
       rev.tags = [];
+      commentDirty = false;
       saveStorage();
       syncStars(0);
       document.querySelectorAll('.tag-toggle').forEach(b => b.classList.remove('on'));
@@ -1042,13 +1148,10 @@ function renderDetail() {
     });
   }
 
-  // Auto-save comment on blur
-  document.getElementById('commentBox').addEventListener('blur', () => {
-    const rev = getReview(currentId);
-    rev.comment = document.getElementById('commentBox').value;
-    saveStorage();
-    syncClearBtn(rev);
-    renderList();
+  // Track unsaved comment changes
+  document.getElementById('commentBox').addEventListener('input', () => {
+    const saved = getReview(currentId).comment || '';
+    commentDirty = document.getElementById('commentBox').value !== saved;
   });
 
   scroll.scrollTop = 0;
@@ -1075,6 +1178,7 @@ function syncClearBtn(rev) {
       r.rating = 0;
       r.comment = '';
       r.tags = [];
+      commentDirty = false;
       saveStorage();
       syncStars(0);
       document.querySelectorAll('.tag-toggle').forEach(b => b.classList.remove('on'));
@@ -1119,9 +1223,39 @@ document.getElementById('prevBtn').addEventListener('click', () => navigate(-1))
 document.getElementById('nextBtn').addEventListener('click', () => navigate(1));
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeShortcutsModal(); return; }
+
   if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); navigate(-1); }
-  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); navigate(1); }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  if (e.key === '?') { e.preventDefault(); openShortcutsModal(); return; }
+
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'p') { e.preventDefault(); navigate(-1); }
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'n') { e.preventDefault(); navigate(1); }
+
+  if (currentId && '12345'.includes(e.key) && e.key.length === 1) {
+    e.preventDefault();
+    const rating = +e.key;
+    const rev = getReview(currentId);
+    rev.rating = rating;
+    saveStorage();
+    syncStars(rating);
+    syncClearBtn(rev);
+    renderList();
+    navigate(1);
+  }
+});
+
+function openShortcutsModal() {
+  document.getElementById('shortcutsOverlay').classList.remove('hidden');
+}
+function closeShortcutsModal() {
+  document.getElementById('shortcutsOverlay').classList.add('hidden');
+}
+
+document.getElementById('shortcutsClose').addEventListener('click', closeShortcutsModal);
+document.getElementById('shortcutsOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeShortcutsModal();
 });
 
 // ─────────────────────────────────────────────
