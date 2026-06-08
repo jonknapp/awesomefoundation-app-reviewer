@@ -184,12 +184,52 @@
     .sidebar-header-top h2 { font-size: .85rem; font-weight: 600; flex: 1; }
     #filterBar {
       display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .filter-group-label {
+      font-size: .6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: var(--text-dim);
+    }
+    /* 3-way toggle */
+    .filter-toggle {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+      width: fit-content;
+    }
+    .filter-toggle-btn {
+      font-size: .7rem;
+      padding: 3px 10px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: background .12s, color .12s;
+      white-space: nowrap;
+    }
+    .filter-toggle-btn:not(:last-child) { border-right: 1px solid var(--border); }
+    .filter-toggle-btn.active { background: var(--accent); color: #fff; }
+    .filter-toggle-btn.active-danger { background: rgba(242,92,92,.15); color: var(--red); }
+    /* sub-pills */
+    .filter-sub-pills {
+      display: flex;
       gap: 4px;
       flex-wrap: wrap;
+      padding-left: 2px;
     }
     .filter-btn {
-      font-size: .7rem;
-      padding: 3px 8px;
+      font-size: .68rem;
+      padding: 2px 8px;
       border-radius: 99px;
       border: 1px solid var(--border);
       background: transparent;
@@ -198,8 +238,6 @@
       transition: all .15s;
     }
     .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .filter-btn.hidden-filter { color: var(--red); border-color: rgba(242,92,92,.35); }
-    .filter-btn.hidden-filter.active { background: rgba(242,92,92,.15); border-color: var(--red); color: var(--red); }
     #searchBox {
       width: 100%;
       padding: 6px 10px;
@@ -706,17 +744,35 @@
         <h2 id="sidebarTitle">Applications</h2>
       </div>
       <div id="filterBar">
-        <button class="filter-btn" data-filter="all">All</button>
-        <button class="filter-btn" data-filter="not-viewed">Not Viewed</button>
-        <button class="filter-btn" data-filter="viewed">Viewed</button>
-        <button class="filter-btn" data-filter="reviewed">Reviewed</button>
-        <button class="filter-btn" data-filter="not-reviewed">Not Reviewed</button>
-        <button class="filter-btn" data-filter="spam">Spam</button>
-        <button class="filter-btn" data-filter="nonprofit">Nonprofit</button>
-        <button class="filter-btn" data-filter="private">Private</button>
-        <button class="filter-btn" data-filter="duplicate">Duplicate</button>
-        <button class="filter-btn" data-filter="not-hidden">Not Hidden</button>
-        <button class="filter-btn hidden-filter" data-filter="hidden">Hidden</button>
+        <div class="filter-group">
+          <div class="filter-group-label">Review status</div>
+          <div class="filter-toggle" id="reviewToggle">
+            <button class="filter-toggle-btn" data-toggle="review" data-value="not-reviewed">Not Reviewed</button>
+            <button class="filter-toggle-btn" data-toggle="review" data-value="all">All</button>
+            <button class="filter-toggle-btn" data-toggle="review" data-value="reviewed">Reviewed</button>
+          </div>
+          <div class="filter-sub-pills" id="statusSubPills">
+            <button class="filter-btn" data-filter="not-viewed">Not Viewed</button>
+            <button class="filter-btn" data-filter="viewed">Viewed</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-group-label">Hidden</div>
+          <div class="filter-toggle" id="hiddenToggle">
+            <button class="filter-toggle-btn" data-toggle="hidden" data-value="not-hidden">Not Hidden</button>
+            <button class="filter-toggle-btn" data-toggle="hidden" data-value="all">All</button>
+            <button class="filter-toggle-btn" data-toggle="hidden" data-value="hidden">Hidden</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-group-label">Tags</div>
+          <div class="filter-sub-pills">
+            <button class="filter-btn" data-filter="spam">Spam</button>
+            <button class="filter-btn" data-filter="nonprofit">Nonprofit</button>
+            <button class="filter-btn" data-filter="private">Private</button>
+            <button class="filter-btn" data-filter="duplicate">Duplicate</button>
+          </div>
+        </div>
       </div>
       <input type="text" id="searchBox" placeholder="Search applications…">
     </div>
@@ -1584,41 +1640,64 @@ function updateStorageNotice() {
 // ─────────────────────────────────────────────
 // Filter / search
 // ─────────────────────────────────────────────
-document.getElementById('filterBar').addEventListener('click', e => {
-  const btn = e.target.closest('.filter-btn');
-  if (!btn) return;
-  const f = btn.dataset.filter;
 
-  if (f === 'all') {
-    activeFilters.clear();
-  } else {
-    // 'hidden' and 'not-hidden' are mutually exclusive
-    if (f === 'hidden' && activeFilters.has(f)) {
-      activeFilters.delete('hidden');
-    } else if (f === 'hidden') {
-      activeFilters.add('hidden');
+// 3-way toggles: set the active segment and update activeFilters
+document.getElementById('filterBar').addEventListener('click', e => {
+  // 3-way toggle buttons
+  const toggleBtn = e.target.closest('.filter-toggle-btn');
+  if (toggleBtn) {
+    const group = toggleBtn.dataset.toggle;
+    const value = toggleBtn.dataset.value;
+    if (group === 'review') {
+      activeFilters.delete('not-reviewed');
+      activeFilters.delete('reviewed');
+      if (value === 'not-reviewed') activeFilters.add('not-reviewed');
+      else if (value === 'reviewed') activeFilters.add('reviewed');
+      // 'all' = neither set
+    } else if (group === 'hidden') {
       activeFilters.delete('not-hidden');
-    } else if (f === 'not-hidden' && activeFilters.has(f)) {
-      activeFilters.delete('not-hidden');
-    } else if (f === 'not-hidden') {
-      activeFilters.add('not-hidden');
       activeFilters.delete('hidden');
-    } else {
-      // Toggle all other filters
-      if (activeFilters.has(f)) activeFilters.delete(f);
-      else activeFilters.add(f);
+      if (value === 'not-hidden') activeFilters.add('not-hidden');
+      else if (value === 'hidden') activeFilters.add('hidden');
     }
+    syncFilterButtons();
+    renderList();
+    return;
   }
 
-  syncFilterButtons();
-  renderList();
+  // Sub-pill toggle buttons
+  const pillBtn = e.target.closest('.filter-btn');
+  if (pillBtn) {
+    const f = pillBtn.dataset.filter;
+    if (activeFilters.has(f)) activeFilters.delete(f);
+    else activeFilters.add(f);
+    syncFilterButtons();
+    renderList();
+  }
 });
 
 function syncFilterButtons() {
-  const allActive = activeFilters.size === 0;
-  document.querySelectorAll('.filter-btn').forEach(b => {
-    const f = b.dataset.filter;
-    b.classList.toggle('active', f === 'all' ? allActive : activeFilters.has(f));
+  // 3-way review toggle
+  const reviewVal = activeFilters.has('not-reviewed') ? 'not-reviewed'
+                  : activeFilters.has('reviewed') ? 'reviewed'
+                  : 'all';
+  document.querySelectorAll('[data-toggle="review"]').forEach(b => {
+    b.classList.toggle('active', b.dataset.value === reviewVal);
+  });
+
+  // 3-way hidden toggle
+  const hiddenVal = activeFilters.has('not-hidden') ? 'not-hidden'
+                  : activeFilters.has('hidden') ? 'hidden'
+                  : 'all';
+  document.querySelectorAll('[data-toggle="hidden"]').forEach(b => {
+    const isActive = b.dataset.value === hiddenVal;
+    b.classList.remove('active', 'active-danger');
+    if (isActive) b.classList.add(hiddenVal === 'hidden' ? 'active-danger' : 'active');
+  });
+
+  // Sub-pills
+  document.querySelectorAll('.filter-btn[data-filter]').forEach(b => {
+    b.classList.toggle('active', activeFilters.has(b.dataset.filter));
   });
 }
 
