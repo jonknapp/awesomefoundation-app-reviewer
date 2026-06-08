@@ -52,6 +52,46 @@
       flex-shrink: 0;
     }
     header h1 { font-size: 1rem; font-weight: 600; letter-spacing: .02em; }
+    .help-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-dim);
+      font-size: .72rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: default;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .help-icon:hover { border-color: var(--text-dim); color: var(--text); }
+    .help-icon .tooltip {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 7px 10px;
+      font-size: .75rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity .15s, transform .15s;
+      z-index: 50;
+      font-weight: 400;
+    }
+    .help-icon .tooltip kbd {
+      font-size: .7rem;
+      padding: 1px 5px;
+    }
+    .help-icon:hover .tooltip { opacity: 1; transform: translateY(0); }
     header .stats {
       margin-left: auto;
       display: flex;
@@ -386,13 +426,7 @@
     textarea.comment-box:focus { border-color: var(--accent); }
 
     .review-actions { display: flex; gap: 10px; align-items: center; }
-    .save-indicator {
-      font-size: .75rem;
-      color: var(--green);
-      opacity: 0;
-      transition: opacity .3s;
-    }
-    .save-indicator.visible { opacity: 1; }
+
 
     /* ── Empty state ── */
     .empty-detail {
@@ -641,6 +675,7 @@
   <div class="stats" id="headerStats"></div>
   <button class="btn" id="changeFileBtn" style="display:none">Load CSV</button>
   <button class="btn primary" id="exportBtn" style="display:none">Export CSV</button>
+  <span class="help-icon">?<span class="tooltip">Press <kbd>?</kbd> to view keyboard shortcuts</span></span>
 </header>
 
 <div class="app-body">
@@ -810,7 +845,6 @@ let reviews = {};        // { [id]: { rating, comment, tags: [], viewed } }
 let activeFilters = new Set(['not-hidden', 'not-reviewed']); // default: hide hidden and already-reviewed
 let currentSearch = '';
 let currentId = null;
-let commentDirty = false;
 
 function getAppId(app, idx) {
   return app.id && app.id.trim() ? app.id.trim() : `__row_${idx}`;
@@ -920,14 +954,7 @@ function renderList() {
 // ─────────────────────────────────────────────
 // Open application
 // ─────────────────────────────────────────────
-function confirmNavigate() {
-  if (!commentDirty) return true;
-  return confirm('You have unsaved comment changes. Discard and continue?');
-}
-
 function openApp(id) {
-  if (id !== currentId && !confirmNavigate()) return;
-  commentDirty = false;
   currentId = id;
 
   // Mark as viewed
@@ -1067,8 +1094,6 @@ function renderDetail() {
       </div>
 
       <div class="review-actions">
-        <button class="btn primary" id="saveReviewBtn">Save Review</button>
-        <span class="save-indicator" id="saveIndicator">Saved!</span>
         ${r.rating > 0 || (r.comment && r.comment.trim()) || (r.tags && r.tags.length) ? `<button class="btn danger" id="clearReviewBtn">Clear Review</button>` : ''}
       </div>
     </div>
@@ -1117,19 +1142,6 @@ function renderDetail() {
     });
   });
 
-  // Save
-  document.getElementById('saveReviewBtn').addEventListener('click', () => {
-    const rev = getReview(currentId);
-    rev.comment = document.getElementById('commentBox').value;
-    commentDirty = false;
-    saveStorage();
-    syncClearBtn(rev);
-    renderList();
-    const ind = document.getElementById('saveIndicator');
-    ind.classList.add('visible');
-    setTimeout(() => ind.classList.remove('visible'), 1800);
-  });
-
   // Clear
   const clearBtn = document.getElementById('clearReviewBtn');
   if (clearBtn) {
@@ -1138,7 +1150,6 @@ function renderDetail() {
       rev.rating = 0;
       rev.comment = '';
       rev.tags = [];
-      commentDirty = false;
       saveStorage();
       syncStars(0);
       document.querySelectorAll('.tag-toggle').forEach(b => b.classList.remove('on'));
@@ -1148,10 +1159,13 @@ function renderDetail() {
     });
   }
 
-  // Track unsaved comment changes
+  // Auto-save comment on input
   document.getElementById('commentBox').addEventListener('input', () => {
-    const saved = getReview(currentId).comment || '';
-    commentDirty = document.getElementById('commentBox').value !== saved;
+    const rev = getReview(currentId);
+    rev.comment = document.getElementById('commentBox').value;
+    saveStorage();
+    syncClearBtn(rev);
+    renderList();
   });
 
   scroll.scrollTop = 0;
@@ -1178,7 +1192,6 @@ function syncClearBtn(rev) {
       r.rating = 0;
       r.comment = '';
       r.tags = [];
-      commentDirty = false;
       saveStorage();
       syncStars(0);
       document.querySelectorAll('.tag-toggle').forEach(b => b.classList.remove('on'));
