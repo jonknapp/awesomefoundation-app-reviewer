@@ -1113,12 +1113,12 @@ function renderDetail() {
       <div class="subtitle">${esc(app.title || '')}</div>
       <div class="meta-row">
         ${app.chapter_name ? `<span>Chapter: <b>${esc(app.chapter_name)}</b></span>` : ''}
-        ${app.id ? `<span>ID: <b>${esc(app.id)}</b></span>` : ''}
+        ${app.id ? `<span>ID: <a href="https://www.awesomefoundation.org/en/chapters/cleveland/projects/${esc(app.id)}" target="_blank" rel="noopener">${esc(app.id)}<svg style="display:inline-block;vertical-align:middle;margin-left:3px;opacity:.6" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></span>` : ''}
         ${app.created_at ? `<span>Submitted: <b>${esc(app.created_at)}</b></span>` : ''}
         ${app.funded_on ? `<span>Funded: <b>${esc(app.funded_on)}</b></span>` : ''}
         ${app.email ? `<span>Email: <a href="mailto:${esc(app.email)}">${esc(app.email)}</a></span>` : ''}
         ${app.phone ? `<span>Phone: <b>${esc(app.phone)}</b></span>` : ''}
-        ${app.url ? `<span>URL: <a href="${esc(app.url)}" target="_blank" rel="noopener">${esc(app.url)}</a></span>` : ''}
+        ${app.url ? `<span>URL: <a href="${esc(app.url)}" target="_blank" rel="noopener">${esc(app.url)}<svg style="display:inline-block;vertical-align:middle;margin-left:3px;opacity:.6" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></span>` : ''}
         ${app.rss_feed_url ? `<span>RSS: <a href="${esc(app.rss_feed_url)}" target="_blank" rel="noopener">Feed</a></span>` : ''}
       </div>
     </div>
