@@ -238,6 +238,28 @@
       transition: all .15s;
     }
     .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    /* Star rating filter row */
+    .filter-star-row {
+      display: flex;
+      gap: 4px;
+      padding-left: 2px;
+    }
+    .filter-star-btn {
+      font-size: .68rem;
+      padding: 2px 7px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all .15s;
+      font-weight: 600;
+    }
+    .filter-star-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
     #searchBox {
       width: 100%;
       padding: 6px 10px;
@@ -766,6 +788,16 @@
           </div>
         </div>
         <div class="filter-group">
+          <div class="filter-group-label">Rating</div>
+          <div class="filter-star-row" id="starFilterPills">
+            <button class="filter-star-btn" data-star="1">1</button>
+            <button class="filter-star-btn" data-star="2">2</button>
+            <button class="filter-star-btn" data-star="3">3</button>
+            <button class="filter-star-btn" data-star="4">4</button>
+            <button class="filter-star-btn" data-star="5">5</button>
+          </div>
+        </div>
+        <div class="filter-group">
           <div class="filter-group-label">Tags</div>
           <div class="filter-sub-pills">
             <button class="filter-btn" data-filter="spam">Spam</button>
@@ -900,6 +932,7 @@ const REVIEW_COLS = ['_review_rating', '_review_comment', '_review_tags', '_revi
 let applications = [];   // array of raw data objects
 let reviews = {};        // { [id]: { rating, comment, tags: [], viewed } }
 let activeFilters = new Set(['not-hidden', 'not-reviewed']); // default: hide hidden and already-reviewed
+let activeStarFilters = new Set(); // empty = no star filter applied
 let currentSearch = '';
 let currentId = null;
 
@@ -960,6 +993,9 @@ function getFilteredIds() {
       // Hidden filters — mutually exclusive pair
       if (activeFilters.has('hidden') && !isHidden) return false;
       if (activeFilters.has('not-hidden') && isHidden) return false;
+
+      // Star rating filter — app must match one of the selected ratings
+      if (activeStarFilters.size && !activeStarFilters.has(r.rating || 0)) return false;
 
       if (search) {
         const haystack = Object.values(app).join(' ').toLowerCase();
@@ -1676,6 +1712,17 @@ document.getElementById('filterBar').addEventListener('click', e => {
     else activeFilters.add(f);
     syncFilterButtons();
     renderList();
+    return;
+  }
+
+  // Star rating filter pills
+  const starBtn = e.target.closest('.filter-star-btn');
+  if (starBtn) {
+    const n = +starBtn.dataset.star;
+    if (activeStarFilters.has(n)) activeStarFilters.delete(n);
+    else activeStarFilters.add(n);
+    syncFilterButtons();
+    renderList();
   }
 });
 
@@ -1701,6 +1748,11 @@ function syncFilterButtons() {
   // Sub-pills
   document.querySelectorAll('.filter-btn[data-filter]').forEach(b => {
     b.classList.toggle('active', activeFilters.has(b.dataset.filter));
+  });
+
+  // Star rating pills
+  document.querySelectorAll('.filter-star-btn[data-star]').forEach(b => {
+    b.classList.toggle('active', activeStarFilters.has(+b.dataset.star));
   });
 }
 
