@@ -314,9 +314,10 @@
 
     .stars-mini {
       font-size: .72rem;
-      color: var(--yellow);
       letter-spacing: .05em;
     }
+    .stars-mini-filled { color: var(--yellow); }
+    .stars-mini-empty  { color: var(--text-dim); }
 
     /* ── Detail pane ── */
     #detail {
@@ -987,7 +988,9 @@ function renderList() {
     el.className = 'app-item' + (id === currentId ? ' active' : '');
     el.dataset.id = id;
 
-    const starsStr = r.rating > 0 ? '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating) : '';
+    const starsStr = r.rating > 0
+      ? `<span class="stars-mini-filled">${'★'.repeat(r.rating)}</span><span class="stars-mini-empty">${'☆'.repeat(5 - r.rating)}</span>`
+      : '';
 
     el.innerHTML = `
       <div class="app-item-name">${esc(app.name || '(no name)')}</div>
