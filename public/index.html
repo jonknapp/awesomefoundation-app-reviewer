@@ -29,6 +29,8 @@
       --tag-private-border: #4f6ef7;
       --tag-duplicate: #4a1d96;
       --tag-duplicate-border: #a78bfa;
+      --tag-funded: #0c2f1a;
+      --tag-funded-border: #22c55e;
     }
 
     body {
@@ -333,6 +335,7 @@
     .tag-pill.nonprofit { background: var(--tag-nonprofit); border: 1px solid var(--tag-nonprofit-border); color: var(--tag-nonprofit-border); }
     .tag-pill.private { background: var(--tag-private); border: 1px solid var(--tag-private-border); color: var(--tag-private-border); }
     .tag-pill.duplicate { background: var(--tag-duplicate); border: 1px solid var(--tag-duplicate-border); color: var(--tag-duplicate-border); }
+    .tag-pill.funded { background: var(--tag-funded); border: 1px solid var(--tag-funded-border); color: var(--tag-funded-border); }
 
     .stars-mini {
       font-size: .72rem;
@@ -469,6 +472,7 @@
     .tag-toggle[data-tag="nonprofit"].on { background: var(--tag-nonprofit); border-color: var(--tag-nonprofit-border); color: var(--tag-nonprofit-border); }
     .tag-toggle[data-tag="private"].on { background: var(--tag-private); border-color: var(--tag-private-border); color: var(--tag-private-border); }
     .tag-toggle[data-tag="duplicate"].on { background: var(--tag-duplicate); border-color: var(--tag-duplicate-border); color: var(--tag-duplicate-border); }
+    .tag-toggle[data-tag="funded"].on { background: var(--tag-funded); border-color: var(--tag-funded-border); color: var(--tag-funded-border); }
 
     textarea.comment-box {
       width: 100%;
@@ -804,6 +808,7 @@
             <button class="filter-btn" data-filter="nonprofit">Nonprofit</button>
             <button class="filter-btn" data-filter="private">Private</button>
             <button class="filter-btn" data-filter="duplicate">Duplicate</button>
+            <button class="filter-btn" data-filter="funded">Funded</button>
           </div>
         </div>
       </div>
@@ -986,7 +991,7 @@ function getFilteredIds() {
       if (allowedStatuses.size && !allowedStatuses.has(status)) return false;
 
       // Tag filters — app must have ALL active tag filters
-      for (const tag of ['spam', 'nonprofit', 'private', 'duplicate']) {
+      for (const tag of ['spam', 'nonprofit', 'private', 'duplicate', 'funded']) {
         if (activeFilters.has(tag) && !tags.includes(tag)) return false;
       }
 
@@ -1177,7 +1182,7 @@ function renderDetail() {
       <div class="review-row">
         <label>Tags</label>
         <div class="tag-row">
-          ${['spam','nonprofit','private','duplicate'].map(tag =>
+          ${['spam','nonprofit','private','duplicate','funded'].map(tag =>
             `<button class="tag-toggle${(r.tags||[]).includes(tag) ? ' on' : ''}" data-tag="${tag}">${tag}</button>`
           ).join('')}
         </div>
